@@ -52,7 +52,6 @@ body {
   border-top: 1px solid var(--line);
   padding: 8px 12px;
   padding-bottom: max(8px, env(safe-area-inset-bottom));
-  display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 6px;
 }
@@ -99,13 +98,6 @@ body {
   }
 
   #touch {
-    display: grid; /* override the display:none above */
-  }
-}
-
-/* hide touch row on desktop (override the grid set by #touch rule) */
-@media (min-width: 769px) {
-  #touch {
-    display: none !important;
+    display: grid;
   }
 }

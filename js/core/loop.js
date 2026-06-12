@@ -56,19 +56,17 @@ export function startLoop({ update, draw }) {
       if (time.scaleLeft <= 0) { time.scaleLeft = 0; time.scale = 1; }
     }
 
+    // 顿帧:按真实时间流逝递减(wall-clock,不受步长粒度影响)
+    if (time.freezeLeft > 0) {
+      time.freezeLeft = Math.max(0, time.freezeLeft - realDt);
+    }
+
     // 固定步长追帧
     acc += realDt;
     let steps = 0;
     while (acc >= FIXED_DT && steps < MAX_STEPS) {
-      let dt = FIXED_DT;
-
-      // 顿帧:本步消耗真实时间,游戏 dt=0
-      if (time.freezeLeft > 0) {
-        time.freezeLeft -= FIXED_DT;
-        dt = 0;
-      } else {
-        dt *= time.scale; // 慢动作缩放游戏 dt
-      }
+      // 顿帧期间游戏 dt=0,但 update 仍每步调用(保持动画/粒子驱动)
+      const dt = time.freezeLeft > 0 ? 0 : FIXED_DT * time.scale;
 
       update(dt);
       acc -= FIXED_DT;
