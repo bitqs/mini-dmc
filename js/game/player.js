@@ -73,6 +73,7 @@ export function createPlayer() {
     dodgeT: -1,         // -1 非翻滚;0..DODGE_DUR
     dodgeDir: 1,
     dodgeCd: 0,
+    launcherCd: 0,      // 挑空冷却(250ms,防连挑)
     iframes: false,
     ghosts: [],         // 翻滚残影 {x, y, facing, t}
 
@@ -94,11 +95,6 @@ export function createPlayer() {
   // ---- 边沿检测:本帧按下且上帧未按 = 一次"press" ----
   function pressed(name) {
     return player.input[name] && !player._prev[name];
-  }
-
-  // ---- 是否处于"忙碌"动作(不能自由移动/转向)----
-  function busy() {
-    return player.attackT >= 0 || player.dodgeT >= 0 || player.hurtT > 0;
   }
 
   // ---- 命中管线:对所有重叠的存活敌人结算(多目标)----
@@ -296,12 +292,13 @@ export function createPlayer() {
     else if (pJump) player._buffer = { name: 'jump', t: 0 };
     else if (pDodge) player._buffer = { name: 'dodge', t: 0 };
 
-    player.dodgeCd = Math.max(0, player.dodgeCd - dt);
+    player.dodgeCd    = Math.max(0, player.dodgeCd - dt);
+    player.launcherCd = Math.max(0, player.launcherCd - dt);
 
     // ===================== 受击僵直 =====================
     if (player.hurtT > 0) {
       player.hurtT -= dt;
-      applyPhysics(dt, false);
+      applyPhysics(dt);
       if (player.hurtT <= 0) { player.hurtT = 0; player.state = grounded() ? 'idle' : 'fall'; }
       decayHitFields(dt);
       updateGhostsAndDust(dt);
@@ -316,13 +313,13 @@ export function createPlayer() {
         player.ghosts.push({ x: player.x, y: player.y, facing: player.facing, t: 0, born: player.dodgeT });
       }
       player.vx = player.dodgeDir * DODGE_SPD;
-      applyPhysics(dt, false);   // 翻滚期间保留重力(可滚下台,但通常在地面)
+      applyPhysics(dt);   // 翻滚期间保留重力(可滚下台,但通常在地面)
       if (player.dodgeT >= DODGE_DUR) {
         player.dodgeT = -1;
         player.iframes = false;
         player.dodgeCd = DODGE_CD;
         player.state = grounded() ? 'idle' : 'fall';
-        consumeBuffer(enemies, projectiles);   // 翻滚结束:吃缓冲(接攻击/跳)
+        consumeBuffer();   // 翻滚结束:吃缓冲(接攻击/跳)
       }
       decayHitFields(dt);
       updateGhostsAndDust(dt);
@@ -337,7 +334,7 @@ export function createPlayer() {
         doHit(enemies, projectiles);
       }
       // 攻击中仍受重力(空中攻击会移动);挑空允许立即跳(下方缓冲处理)
-      applyPhysics(dt, false);
+      applyPhysics(dt);
 
       // 挑空特例:命中点过后玩家即可起跳(缓冲的 jump 立即生效,无后摇)
       if (player.attackKind === 'launcher' && player.didHit && bufferIs('jump') && grounded()) {
@@ -350,7 +347,7 @@ export function createPlayer() {
         player.attackT = -1;
         player.attackKind = 'none';
         player.state = grounded() ? 'idle' : 'fall';
-        consumeBuffer(enemies, projectiles);
+        consumeBuffer();
       }
       decayHitFields(dt);
       updateGhostsAndDust(dt);
@@ -373,7 +370,7 @@ export function createPlayer() {
       player.vx *= Math.pow(0.0001, dt);   // 强地面摩擦
     }
 
-    applyPhysics(dt, true);
+    applyPhysics(dt);
 
     if (wasAir && grounded()) {
       onLand();
@@ -381,11 +378,11 @@ export function createPlayer() {
 
     // ---- 起手动作:先吃缓冲,再吃本帧 press ----
     // 缓冲优先(它是上一个动作结束时未消费的);本帧 press 直接处理。
-    if (!tryAction(bufferedName(), enemies, projectiles)) {
+    if (!tryAction(bufferedName())) {
       // 缓冲没触发动作(或没缓冲),尝试本帧实时 press
-      if (pAttack) tryAction('attack', enemies, projectiles);
-      else if (pJump) tryAction('jump', enemies, projectiles);
-      else if (pDodge) tryAction('dodge', enemies, projectiles);
+      if (pAttack) tryAction('attack');
+      else if (pJump) tryAction('jump');
+      else if (pDodge) tryAction('dodge');
     } else {
       clearBuffer();
     }
@@ -406,7 +403,7 @@ export function createPlayer() {
 
   // ---- 尝试触发一个动作(缓冲消费 / 实时 press 共用)----
   // 返回 true 表示动作成功触发(调用方负责清缓冲)。
-  function tryAction(name, enemies, projectiles) {
+  function tryAction(name) {
     if (!name) return false;
     if (name === 'dodge') {
       if (player.dodgeCd <= 0) { startDodge(); return true; }
@@ -421,9 +418,14 @@ export function createPlayer() {
         startAirAttack();
         return true;
       }
-      // 地面:↑+攻击 = 挑空,否则普通连段
-      if (player.input.up) startGroundAttack(true);
-      else startGroundAttack(false);
+      // 地面:↑+攻击 = 挑空(冷却 250ms 防连挑),否则普通连段
+      if (player.input.up) {
+        if (player.launcherCd > 0) return false;
+        startGroundAttack(true);
+        player.launcherCd = 0.25;
+      } else {
+        startGroundAttack(false);
+      }
       return true;
     }
     return false;
@@ -460,7 +462,7 @@ export function createPlayer() {
   }
 
   // ---- 物理:重力 + 落地夹取 ----
-  function applyPhysics(dt, allowFriction) {
+  function applyPhysics(dt) {
     player.x += player.vx * dt;
     if (player.x < 16) { player.x = 16; player.vx = 0; }
     if (player.x > 800 - 16) { player.x = 800 - 16; player.vx = 0; }
@@ -486,10 +488,10 @@ export function createPlayer() {
   function bufferedName() { return player._buffer ? player._buffer.name : null; }
   function bufferIs(n) { return player._buffer && player._buffer.name === n; }
   function clearBuffer() { player._buffer = null; }
-  function consumeBuffer(enemies, projectiles) {
+  function consumeBuffer() {
     if (!player._buffer) return;
     const n = player._buffer.name;
-    if (tryAction(n, enemies, projectiles)) clearBuffer();
+    if (tryAction(n)) clearBuffer();
   }
 
   // ---- 命中字段衰减(玩家自身消费 flashT/squashT/staggerT)----
