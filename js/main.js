@@ -1,24 +1,36 @@
-// js/main.js — Task 5 harness: player + 3 enemy types + token AI
-// Replaces the hand-rolled dummy with createEnemyManager().
+// js/main.js — Task 6: style scoring + 3-wave encounter system
 
 import { startLoop, W, H, GROUND, time } from './core/loop.js';
 import { fx, installFx } from './core/fx.js';
 import { sprites } from './core/sprites.js';
 import { createPlayer } from './game/player.js';
 import { createEnemyManager } from './game/enemies.js';
+import { createStyle } from './game/style.js';
+import { createEncounter } from './game/encounter.js';
 
 installFx();
 
-const player = createPlayer();
 const manager = createEnemyManager();
+const style = createStyle();
 
-// Spawn one of each kind at staggered positions
-manager.spawn('grunt',  560);
-manager.spawn('ranger', 700);
-manager.spawn('heavy',  640);
+// Mutable player holder — onRestart rebuilds and swaps the reference
+const holder = { player: createPlayer() };
 
-// Respawn timer (test convenience: respawn all when all dead after 1.5s)
-let respawnTimer = -1;
+// onRestart: called by encounter to rebuild player; returns fresh player ref
+function onRestart() {
+  const fresh = createPlayer();
+  holder.player = fresh;
+  window.__game.player = fresh;
+  return fresh;
+}
+
+const enc = createEncounter({
+  get player() { return holder.player; },
+  manager,
+  style,
+  time,
+  onRestart,
+});
 
 // ---------- Keyboard → player.input ----------
 const keys = {};
@@ -30,7 +42,7 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => { keys[e.code] = false; });
 
 function readKeyboard() {
-  const i = player.input;
+  const i = holder.player.input;
   i.left   = !!(keys['KeyA'] || keys['ArrowLeft']);
   i.right  = !!(keys['KeyD'] || keys['ArrowRight']);
   i.up     = !!(keys['KeyW'] || keys['ArrowUp']);
@@ -58,8 +70,13 @@ bindTouch('btn-jump', 'jump');
 bindTouch('btn-atk', 'attack');
 bindTouch('btn-dodge', 'dodge');
 
+// Track last HP to detect player getting hurt
+let lastHp = holder.player.hp;
+
 // ---------- Update ----------
 function update(dt) {
+  const player = holder.player;
+
   readKeyboard();
   player.input.left   = player.input.left   || touch.left;
   player.input.right  = player.input.right  || touch.right;
@@ -71,30 +88,22 @@ function update(dt) {
   player.update(dt, { enemies: manager.list, projectiles: manager.projectiles });
   manager.update(dt, player);
 
-  // Respawn all when allDead (1.5s delay)
-  if (manager.allDead()) {
-    if (respawnTimer < 0) respawnTimer = 1.5;
-    else {
-      respawnTimer -= dt;
-      if (respawnTimer <= 0) {
-        respawnTimer = -1;
-        // Clear list and projectiles, respawn
-        manager.list.length = 0;
-        manager.projectiles.length = 0;
-        manager.spawn('grunt',  560);
-        manager.spawn('ranger', 700);
-        manager.spawn('heavy',  640);
-      }
-    }
-  } else {
-    respawnTimer = -1;
+  // Detect HP drop to notify style system
+  if (player.hp < lastHp) {
+    style.notifyPlayerHurt();
   }
+  lastHp = player.hp;
+
+  style.update(dt);
+  enc.update(dt);
 
   fx.fire('onUpdate', { dt });
 }
 
 // ---------- Draw ----------
 function draw(ctx) {
+  const player = holder.player;
+
   // Background
   const sky = ctx.createLinearGradient(0, 0, 0, H);
   sky.addColorStop(0, '#11101f');
@@ -111,10 +120,18 @@ function draw(ctx) {
   ctx.beginPath();
   ctx.moveTo(0, GROUND + 6); ctx.lineTo(W, GROUND + 6); ctx.stroke();
 
+  // Scene: enemies + player
   manager.draw(ctx);
   player.draw(ctx);
 
+  // FX layer (damage numbers, hit VFX, particles)
   fx.fire('onDraw', { ctx });
+
+  // Style HUD (top-right rank/gauge/combo)
+  style.drawHUD(ctx);
+
+  // Encounter overlays (intro title card, result screen, dead screen) — drawn last
+  enc.draw(ctx);
 
   // Debug HUD
   const tok = manager._tokenHolder;
@@ -123,21 +140,13 @@ function draw(ctx) {
   ctx.fillStyle = 'rgba(255,255,255,0.45)';
   ctx.textAlign = 'left';
   ctx.fillText(
-    `state:${player.state}  combo:${player.combo}  air:${player.airCombo}  hp:${player.hp}  token:${tokLabel}`,
+    `state:${player.state}  hp:${player.hp}  wave:${enc.wave}/${enc.state}  pts:${Math.round(style.totalPoints)}  token:${tokLabel}`,
     10, 18
   );
   ctx.fillText('A/D move  W/↑ jump  J/Space attack  K/Shift dodge  W+J launcher', 10, 34);
-
-  // Respawn countdown
-  if (respawnTimer > 0) {
-    ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(255,211,77,0.7)';
-    ctx.font = 'bold 20px monospace';
-    ctx.fillText(`RESPAWN IN ${respawnTimer.toFixed(1)}s`, W / 2, H / 2);
-  }
 }
 
 startLoop({ update, draw });
 
 // Debug handle
-window.__game = { time, fx, player, enemies: manager };
+window.__game = { time, fx, get player() { return holder.player; }, enemies: manager, style, enc };
