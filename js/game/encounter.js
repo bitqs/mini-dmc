@@ -99,6 +99,7 @@ export function createEncounter({ player: playerRef, manager, style, time, onRes
             // All 3 waves done
             enc.state = 'cleared';
             enc._clearedT = 0;
+            manager.projectiles.length = 0;   // 清残留弩箭:cleared 后不该再有伤害源
             time.slowmo(0.25, 1.0);
           }
         }

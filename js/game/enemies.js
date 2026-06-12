@@ -191,6 +191,7 @@ export function createEnemyManager() {
 
       // ---- Airborne: suspend AI, apply gravity ----
       if (e.airborne || e.dy > 0 || e.vy !== 0) {
+        forceReleaseToken(e);   // 持牌被挑空必须还牌,否则全场永久软锁(终审 #1)
         e.vy += 1400 * dt;
         e.dy = Math.max(0, e.dy - e.vy * dt);
         e.x += e.vx * dt;

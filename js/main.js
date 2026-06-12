@@ -21,6 +21,7 @@ function onRestart() {
   const fresh = createPlayer();
   holder.player = fresh;
   lastHp = fresh.hp;   // reset so no spurious notifyPlayerHurt on restart
+  for (const k in keys) keys[k] = false;   // 重开键不残留(否则新玩家开局就挥刀)
   return fresh;
 }
 
