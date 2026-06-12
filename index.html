@@ -7,15 +7,19 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <canvas id="game" width="800" height="450"></canvas>
+  <canvas id="game" width="800" height="450" style="touch-action:none"></canvas>
 
   <!-- touch controls: hidden on desktop (>768px), shown on mobile -->
   <div id="touch">
-    <button id="btn-left">◀</button>
-    <button id="btn-right">▶</button>
-    <button id="btn-jump">JMP</button>
-    <button id="btn-atk">ATK</button>
-    <button id="btn-dodge">DGE</button>
+    <div id="touch-left">
+      <button id="btn-left">◀</button>
+      <button id="btn-right">▶</button>
+    </div>
+    <div id="touch-right">
+      <button id="btn-jump">JMP</button>
+      <button id="btn-atk">ATK</button>
+      <button id="btn-dodge">DGE</button>
+    </div>
   </div>
 
   <script type="module" src="js/main.js"></script>

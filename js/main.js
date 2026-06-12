@@ -1,12 +1,12 @@
-// js/main.js — Task 6: style scoring + 3-wave encounter system
+// js/main.js — Task 7: HUD, touch controls, README
 
 import { startLoop, W, H, GROUND, time } from './core/loop.js';
 import { fx, installFx } from './core/fx.js';
-import { sprites } from './core/sprites.js';
 import { createPlayer } from './game/player.js';
 import { createEnemyManager } from './game/enemies.js';
 import { createStyle } from './game/style.js';
 import { createEncounter } from './game/encounter.js';
+import { createHud } from './game/hud.js';
 
 installFx();
 
@@ -19,8 +19,8 @@ const holder = { player: createPlayer() };
 // onRestart: called by encounter to rebuild player; returns fresh player ref
 function onRestart() {
   const fresh = createPlayer();
-  holder.player = fresh;              // __game.player 是 holder 的 getter,无需赋值
-  lastHp = fresh.hp;  // reset HP tracker so no spurious notifyPlayerHurt on restart
+  holder.player = fresh;
+  lastHp = fresh.hp;   // reset so no spurious notifyPlayerHurt on restart
   return fresh;
 }
 
@@ -30,6 +30,13 @@ const enc = createEncounter({
   style,
   time,
   onRestart,
+});
+
+const hud = createHud({
+  getPlayer: () => holder.player,
+  manager,
+  style,
+  enc,
 });
 
 // ---------- Keyboard → player.input ----------
@@ -51,26 +58,39 @@ function readKeyboard() {
   i.dodge  = !!(keys['KeyK'] || keys['ShiftLeft'] || keys['ShiftRight']);
 }
 
-// ---------- Touch buttons → player.input ----------
+// ---------- Touch buttons → player.input (pointer capture, multi-touch safe) ----------
+const touch = { left: false, right: false, jump: false, attack: false, dodge: false };
+
 function bindTouch(id, prop) {
   const el = document.getElementById(id);
   if (!el) return;
-  const set = (v) => (e) => { e.preventDefault(); touch[prop] = v; };
-  el.addEventListener('touchstart', set(true), { passive: false });
-  el.addEventListener('touchend', set(false), { passive: false });
-  el.addEventListener('touchcancel', set(false), { passive: false });
-  el.addEventListener('mousedown', set(true));
-  el.addEventListener('mouseup', set(false));
-  el.addEventListener('mouseleave', set(false));
+  // Track which pointer IDs are currently pressing this button
+  const activePointers = new Set();
+
+  function onDown(e) {
+    e.preventDefault();
+    activePointers.add(e.pointerId);
+    touch[prop] = true;
+    try { el.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+  }
+  function onUp(e) {
+    e.preventDefault();
+    activePointers.delete(e.pointerId);
+    if (activePointers.size === 0) touch[prop] = false;
+  }
+
+  el.addEventListener('pointerdown',   onDown, { passive: false });
+  el.addEventListener('pointerup',     onUp,   { passive: false });
+  el.addEventListener('pointercancel', onUp,   { passive: false });
 }
-const touch = { left: false, right: false, jump: false, attack: false, dodge: false };
-bindTouch('btn-left', 'left');
+
+bindTouch('btn-left',  'left');
 bindTouch('btn-right', 'right');
-bindTouch('btn-jump', 'jump');
-bindTouch('btn-atk', 'attack');
+bindTouch('btn-jump',  'jump');
+bindTouch('btn-atk',   'attack');
 bindTouch('btn-dodge', 'dodge');
 
-// Track last HP to detect player getting hurt
+// Track last HP to notify style system on player hurt
 let lastHp = holder.player.hp;
 
 // ---------- Update ----------
@@ -81,14 +101,14 @@ function update(dt) {
   player.input.left   = player.input.left   || touch.left;
   player.input.right  = player.input.right  || touch.right;
   player.input.jump   = player.input.jump   || touch.jump;
-  player.input.up     = player.input.up     || touch.jump;
+  player.input.up     = player.input.up     || touch.jump;   // JMP hold → up (enables launcher)
   player.input.attack = player.input.attack || touch.attack;
   player.input.dodge  = player.input.dodge  || touch.dodge;
 
   player.update(dt, { enemies: manager.list, projectiles: manager.projectiles });
   manager.update(dt, player);
 
-  // Detect HP drop to notify style system
+  // Notify style system on HP drop (gauge penalty)
   if (player.hp < lastHp) {
     style.notifyPlayerHurt();
   }
@@ -127,23 +147,27 @@ function draw(ctx) {
   // FX layer (damage numbers, hit VFX, particles)
   fx.fire('onDraw', { ctx });
 
+  // HUD: HP bar, wave indicator, controls hint
+  hud.draw(ctx);
+
   // Style HUD (top-right rank/gauge/combo)
   style.drawHUD(ctx);
 
   // Encounter overlays (intro title card, result screen, dead screen) — drawn last
   enc.draw(ctx);
 
-  // Debug HUD
-  const tok = manager._tokenHolder;
-  const tokLabel = tok ? `${tok.kind}@${tok._aiState}` : 'free';
-  ctx.font = '12px monospace';
-  ctx.fillStyle = 'rgba(255,255,255,0.45)';
-  ctx.textAlign = 'left';
-  ctx.fillText(
-    `state:${player.state}  hp:${player.hp}  wave:${enc.wave}/${enc.state}  pts:${Math.round(style.totalPoints)}  token:${tokLabel}`,
-    10, 18
-  );
-  ctx.fillText('A/D move  W/↑ jump  J/Space attack  K/Shift dodge  W+J launcher', 10, 34);
+  // Debug HUD (only when window.__debug = true)
+  if (window.__debug) {
+    const tok = manager._tokenHolder;
+    const tokLabel = tok ? `${tok.kind}@${tok._aiState}` : 'free';
+    ctx.font = '12px monospace';
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.textAlign = 'left';
+    ctx.fillText(
+      `state:${player.state}  hp:${player.hp}  wave:${enc.wave}/${enc.state}  pts:${Math.round(style.totalPoints)}  token:${tokLabel}`,
+      10, 18
+    );
+  }
 }
 
 startLoop({ update, draw });

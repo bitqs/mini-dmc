@@ -35,11 +35,12 @@ body {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #06060f;
-  /* prevent blurry pixel art if we ever go low-res */
   image-rendering: pixelated;
+  /* prevent browser pan/zoom interfering with canvas touches */
+  touch-action: none;
 }
 
-/* ---------- touch buttons ---------- */
+/* ---------- touch bar ---------- */
 #touch {
   display: none; /* hidden on desktop */
   width: 100%;
@@ -52,14 +53,32 @@ body {
   border-top: 1px solid var(--line);
   padding: 8px 12px;
   padding-bottom: max(8px, env(safe-area-inset-bottom));
-  grid-template-columns: repeat(5, 1fr);
+  /* two clusters: movement left, actions right */
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+/* left cluster: ◀ ▶ */
+#touch-left {
+  display: flex;
   gap: 6px;
 }
 
+/* right cluster: JMP  ATK  DGE */
+#touch-right {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* base button */
 #touch button {
   position: relative;
   top: 0;
   min-height: 56px;
+  min-width: 56px;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -71,13 +90,45 @@ body {
   cursor: pointer;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+  touch-action: none;
   box-shadow: 0 3px 0 #06060c;
-  transition: color 0.1s;
+  transition: color 0.08s, background 0.08s;
 }
 
-#touch button:active {
+#touch button:active,
+#touch button.pressed {
   top: 3px;
   box-shadow: none;
+  color: var(--accent);
+}
+
+/* ATK — primary: gold-filled, largest */
+#btn-atk {
+  min-height: 64px;
+  min-width: 68px;
+  background: var(--accent);
+  color: #0a0a12;
+  border-color: var(--accent);
+  font-size: 15px;
+  box-shadow: 0 4px 0 #b89400;
+}
+#btn-atk:active,
+#btn-atk.pressed {
+  top: 4px;
+  box-shadow: none;
+  background: #ffe580;
+  color: #0a0a12;
+}
+
+/* DGE — gold outline */
+#btn-dodge {
+  background: transparent;
+  border: 2px solid var(--accent);
+  color: var(--accent);
+}
+#btn-dodge:active,
+#btn-dodge.pressed {
+  background: rgba(255,211,77,0.15);
   color: var(--accent);
 }
 
@@ -98,6 +149,6 @@ body {
   }
 
   #touch {
-    display: grid;
+    display: flex;
   }
 }
