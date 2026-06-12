@@ -161,6 +161,7 @@ export function createEnemyManager() {
 
       // ---- Corpse phase ----
       if (!e.alive) {
+        forceReleaseToken(e);          // 持牌阵亡必须立刻还牌,否则全场再无人能进攻
         e._corpseT += dt;
 
         // Corpse physics: vx decay, gravity for dy
