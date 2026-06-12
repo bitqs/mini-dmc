@@ -19,8 +19,7 @@ const holder = { player: createPlayer() };
 // onRestart: called by encounter to rebuild player; returns fresh player ref
 function onRestart() {
   const fresh = createPlayer();
-  holder.player = fresh;
-  window.__game.player = fresh;
+  holder.player = fresh;              // __game.player 是 holder 的 getter,无需赋值
   lastHp = fresh.hp;  // reset HP tracker so no spurious notifyPlayerHurt on restart
   return fresh;
 }
