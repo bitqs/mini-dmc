@@ -21,6 +21,7 @@ function onRestart() {
   const fresh = createPlayer();
   holder.player = fresh;
   window.__game.player = fresh;
+  lastHp = fresh.hp;  // reset HP tracker so no spurious notifyPlayerHurt on restart
   return fresh;
 }
 
