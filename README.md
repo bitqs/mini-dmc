@@ -1,5 +1,7 @@
 # mini-dmc
 
+**🎮 Play online / 在线体验:<https://mini-dmc.shuangqu.workers.dev>**
+
 **EN** A bite-sized open-source game that recreates the core combat loop of Devil May Cry — ground combos, launchers, aerial juggles, dodge i-frames, and a DMC-style style-gauge ranking system — built entirely in vanilla JS + Canvas.
 
 **ZH** 复刻鬼泣核心循环的开源小游戏：地面四连、挑空、空中三连收尾下劈、翻滚无敌帧，以及完整的 Style 评分系统，纯原生 JS + Canvas 实现，零依赖。
